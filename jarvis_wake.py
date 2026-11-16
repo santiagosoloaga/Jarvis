@@ -2,7 +2,9 @@
 # Lo llamas por su nombre ("ey yarbis", "che Jarvis", "Jarvis, ¿que hora es?"),
 # charlan todo lo que quieras, y con "Chau Jarvis" vuelve a dormir.
 
+import os
 import random
+import time
 import string
 import unicodedata
 from collections import deque
@@ -13,11 +15,13 @@ import sounddevice as sd
 from faster_whisper import WhisperModel
 from piper import PiperVoice
 
+import atajos
 import cerebro
+import control_pc
 import efectos
 import herramientas
 import personalidad
-from jarvis_voz import (hablar, sintetizar, reproducir,
+from jarvis_voz import (hablar, sintetizar, reproducir, transcribir,
                         MODELO_WHISPER, VOZ, FRECUENCIA)
 
 # ---------- CONFIGURACION ----------
@@ -40,7 +44,7 @@ UMBRAL = 0.5               # puntaje minimo para despertar (0 a 1)
 BLOQUE_VOZ = 1600          # 1600 muestras = 0,1 s
 UMBRAL_VOLUMEN = 0.01      # volumen minimo para considerar que hablas
                            # (medido: silencio ~0.004, voz 0.01-0.07)
-SILENCIO_FINAL = 1.2       # segundos callado = terminaste la frase
+SILENCIO_FINAL = 0.8       # segundos callado = terminaste la frase (si te corta, subilo a 1.0)
 ESPERA_MAXIMA = 6.0        # segundos sin que empieces a hablar (despierto)
 GRABACION_MAXIMA = 20.0    # corte de seguridad por frase
 SILENCIOS_PARA_DORMIR = 2  # turnos seguidos sin hablar -> vuelve a dormir
@@ -50,7 +54,7 @@ PALABRAS_APAGAR = ("apagate",)
 # Toques de JARVIS
 PROBABILIDAD_ACUSE = 0.5   # 0 a 1: cada cuanto dice "Un momento" al pensar
 PIP_AL_ESCUCHAR = True     # pip corto cuando te toca hablar
-SALUDO_COMPLETO = True     # False = saludo corto, sin hora ni clima
+SALUDO_INICIAL = "Hola Santiago, ¿dime qué necesitas?"   # lo único que dice al arrancar
 
 
 # ---------- AVISOS PARA LA INTERFAZ ----------
@@ -147,10 +151,14 @@ def escuchar_hasta_silencio(oido, espera_maxima=ESPERA_MAXIMA, pista=None,
     evento("estado", "analizando")
     audio = np.concatenate(grabado)
     # vad_filter=True: Whisper ignora los silencios y no "inventa" texto
-    segmentos, _ = oido.transcribe(
-        audio, language="es", vad_filter=True, initial_prompt=pista
-    )
-    return " ".join(s.text.strip() for s in segmentos).strip()
+    # Con pista (esperando "Jarvis") va solo en español; los comandos
+    # entienden español e inglés.
+    inicio = time.time()
+    texto = transcribir(oido, audio, pista=pista, bilingue=pista is None,
+                        vad_filter=True)
+    if pista is None:
+        print(f"  [tiempos] oído (Whisper): {time.time() - inicio:.1f} s")
+    return texto
 
 
 # ---------- DORMIDO: esperar que lo llames ----------
@@ -191,12 +199,29 @@ def esperar_wake_word(detector):
 def responder(boca, historial, texto, frases_listas):
     historial.append({"role": "user", "content": texto})
 
+    # ATAJO: pedidos de todos los días (hora, hábitos, abrir apps, volumen...)
+    # se resuelven acá mismo, sin viaje a Gemini (ver atajos.py).
+    inicio = time.time()
+    rapida = atajos.responder_rapido(texto)
+    if rapida is not None:
+        nombre, respuesta = rapida
+        control_pc.nuevo_turno()              # sigue contando los turnos
+        herramientas.ultima_accion = nombre
+        print(f"  [herramienta] {nombre} (atajo, sin Gemini)")
+        print("JARVIS:", respuesta)
+        print(f"  [tiempos] atajo: {time.time() - inicio:.1f} s")
+        evento("jarvis", respuesta)
+        historial.append({"role": "assistant", "content": respuesta})
+        hablar(boca, respuesta)
+        return
+
     # "Un momento, señor" suena MIENTRAS el cerebro piensa:
     # disimula la demora en vez de sumarle tiempo.
     if random.random() < PROBABILIDAD_ACUSE:
         reproducir(random.choice(frases_listas["acuse"]), esperar=False)
     evento("estado", "pensando")
 
+    inicio = time.time()
     try:
         respuesta = cerebro.pensar(historial)  # Gemini u Ollama
     except Exception as error:
@@ -207,11 +232,12 @@ def responder(boca, historial, texto, frases_listas):
         return
 
     print("JARVIS:", respuesta)
+    print(f"  [tiempos] cerebro: {time.time() - inicio:.1f} s")
     evento("jarvis", respuesta)
     historial.append({"role": "assistant", "content": respuesta})
-    sonido = sintetizar(boca, respuesta)  # fabrica el audio...
-    sd.wait()                             # ...termina el "un momento"...
-    reproducir(sonido)                    # ...y responde
+    inicio = time.time()
+    hablar(boca, respuesta)   # habla por frases, mientras fabrica la siguiente
+    print(f"  [tiempos] habló en total {time.time() - inicio:.1f} s (incluye lo que dura el audio)")
 
 
 def decir(boca, texto):
@@ -295,7 +321,8 @@ def arrancar():
 
     oido = cargar(f"Oído (Whisper {MODELO_WHISPER})",
                   lambda: WhisperModel(MODELO_WHISPER, device="cpu",
-                                       compute_type="int8"))
+                                       compute_type="int8",
+                                       cpu_threads=min(8, os.cpu_count() or 4)))
     boca = cargar(f"Voz ({VOZ})", lambda: PiperVoice.load(VOZ))
     if oido is None or boca is None:
         raise SystemExit("Sin oído o sin voz no puedo funcionar.")
@@ -335,10 +362,7 @@ def main():
     instrucciones = personalidad.PERSONALIDAD + herramientas.INSTRUCCIONES
     historial = [{"role": "system", "content": instrucciones}]
 
-    if SALUDO_COMPLETO:
-        saludo = personalidad.saludo_inicial(sistemas_ok)
-    else:
-        saludo = f"En línea, {personalidad.TRATAMIENTO}."
+    saludo = SALUDO_INICIAL
     print("JARVIS:", saludo)
     decir(boca, saludo)
 

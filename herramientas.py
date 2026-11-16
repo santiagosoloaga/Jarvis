@@ -17,7 +17,9 @@ from pathlib import Path
 
 import ollama
 
-from control_pc import HERRAMIENTAS_PC
+from calendario import HERRAMIENTAS_CALENDARIO
+from habitos import HERRAMIENTAS_HABITOS
+from control_pc import HERRAMIENTAS_PC, nuevo_turno
 from informacion import HERRAMIENTAS_INFO
 
 MODELO = "llama3.2:3b"
@@ -91,10 +93,48 @@ def obtener_clima(ciudad: str) -> str:
 # ---------- HERRAMIENTA 3: abrir programas ----------
 # LISTA BLANCA: solo se puede abrir lo que esta aca.
 # Nunca dejes que el LLM ejecute cualquier comando.
+# Formas de abrir (de la mas simple a la mas manual):
+#   - _inicio("x"): usa "start" de Windows. Sirve para apps registradas
+#     (chrome, winword, code...) y protocolos (spotify:, ms-settings:).
+#   - ruta completa al .exe, o un comando que ya anda en la terminal.
+CARPETA_PROYECTOS = str(Path.home() / "proyectos")
+
+
+def _inicio(destino: str) -> list[str]:
+    """Arma el comando 'start' de Windows para abrir una app o protocolo."""
+    return ["cmd", "/c", "start", "", destino]
+
+
 PROGRAMAS = {
+    # --- clasicos de Windows ---
     "bloc de notas": ["notepad.exe"],
     "calculadora": ["calc.exe"],
     "explorador": ["explorer.exe"],
+    "paint": ["mspaint.exe"],
+    "administrador de tareas": ["taskmgr.exe"],
+    "configuración": _inicio("ms-settings:"),
+    "terminal": _inicio("powershell"),
+    "cmd": _inicio("cmd"),
+    # --- Office ---
+    "word": _inicio("winword"),
+    "excel": _inicio("excel"),
+    "powerpoint": _inicio("powerpnt"),
+    # --- navegadores ---
+    "chrome": _inicio("chrome"),
+    "edge": _inicio("msedge"),
+    # --- herramientas de programacion e IA ---
+    "vs code": _inicio("code"),
+    "visual studio code": _inicio("code"),
+    "claude": _inicio("claude:"),  # app de escritorio de Claude
+    "claude code": [  # Claude Code en una terminal, dentro de tus proyectos
+        "cmd", "/c", "start", "powershell", "-NoExit", "-Command",
+        f"cd '{CARPETA_PROYECTOS}'; claude",
+    ],
+    "github": _inicio("https://github.com/santiagosoloaga"),
+    # --- musica y mensajes ---
+    "spotify": _inicio("spotify:"),
+    "whatsapp": _inicio("whatsapp:"),
+    "discord": _inicio("discord:"),
 }
 
 
@@ -103,7 +143,10 @@ def abrir_programa(nombre: str) -> str:
     Abre un programa de la computadora.
 
     Args:
-        nombre: Uno de: bloc de notas, calculadora, explorador, navegador
+        nombre: Uno de: bloc de notas, calculadora, explorador, paint,
+            administrador de tareas, configuración, terminal, cmd, word,
+            excel, powerpoint, chrome, edge, vs code, claude, claude code,
+            github, spotify, whatsapp, discord, navegador
     """
     nombre = nombre.lower().strip()
     if nombre == "navegador":
@@ -112,7 +155,10 @@ def abrir_programa(nombre: str) -> str:
     if nombre not in PROGRAMAS:
         permitidos = ", ".join(list(PROGRAMAS) + ["navegador"])
         return f"No puedo abrir '{nombre}'. Solo puedo abrir: {permitidos}."
-    subprocess.Popen(PROGRAMAS[nombre])
+    try:
+        subprocess.Popen(PROGRAMAS[nombre])
+    except OSError as error:
+        return f"No pude abrir {nombre}: {error}"
     return f"Abrí {nombre}."
 
 
@@ -171,6 +217,22 @@ def _evaluar(nodo):
     raise ValueError("operación no permitida")
 
 
+def numeros_a_python(texto):
+    # Pasa los numeros escritos "a la argentina" al formato de Python:
+    #   "1.234,5" -> "1234.5"   (punto = miles, coma = decimales)
+    #   "17,5"    -> "17.5"
+    #   "1.000.000" -> "1000000" (varios grupos de 3 = miles seguro)
+    #   "3.14"    -> "3.14"     (un solo punto: lo dejamos decimal)
+    def convertir(encontrado):
+        numero = encontrado.group()
+        if "," in numero:
+            return numero.replace(".", "").replace(",", ".")
+        if re.fullmatch(r"\d{1,3}(\.\d{3}){2,}", numero):
+            return numero.replace(".", "")
+        return numero
+    return re.sub(r"\d[\d.,]*\d|\d", convertir, texto)
+
+
 def calcular(expresion: str) -> str:
     """
     Calcula una cuenta matemática de forma exacta. Usala siempre que haya que hacer una cuenta.
@@ -178,7 +240,7 @@ def calcular(expresion: str) -> str:
     Args:
         expresion: La cuenta escrita como en Python, por ejemplo "17.5 * 23", "2 ** 10", "raiz(144)" o "sin(pi / 6)"
     """
-    texto = expresion.replace("×", "*").replace("^", "**").replace(",", ".")
+    texto = numeros_a_python(expresion.replace("×", "*").replace("^", "**"))
     try:
         resultado = _evaluar(ast.parse(texto, mode="eval").body)
     except ZeroDivisionError:
@@ -361,6 +423,8 @@ HERRAMIENTAS = {
         obtener_dolar, buscar_informacion,
     ] + HERRAMIENTAS_PC     # las de control_pc.py
     + HERRAMIENTAS_INFO   # las de informacion.py
+    + HERRAMIENTAS_CALENDARIO   # las de calendario.py
+    + HERRAMIENTAS_HABITOS   # las de habitos.py (tracker de Notion)
 }
 
 INSTRUCCIONES = (
@@ -379,6 +443,19 @@ INSTRUCCIONES = (
     " resumir_pdf, y para preguntas sobre sus planillas de Excel o CSV"
     " usá consultar_planilla (los totales y promedios ya vienen"
     " calculados: usalos tal cual)."
+    " Para agendar algo usá agregar_evento y para ver qué tiene el"
+    " usuario un día usá consultar_agenda. Pasales el día y la hora"
+    " TAL CUAL los dijo el usuario (por ejemplo 'jueves' y '10 y"
+    " media'): nunca calcules vos la fecha. Después de agendar, repetí"
+    " el día y la hora que te devolvió la herramienta."
+    " Cuando el usuario cuente que cumplió hábitos (gimnasio, estudiar,"
+    " agua, pasos, etc.) usá marcar_habitos con sus palabras TAL CUAL."
+    " Para saber qué cumplió o qué le falta, o si pide analizar, ver o"
+    " revisar el tracker de hábitos de Notion, usá ver_habitos: no"
+    " digas que no tenés acceso a Notion, porque sí lo tenés."
+    " NUNCA contestes de memoria sobre los hábitos ni inventes hábitos:"
+    " cada vez que pregunte qué cumplió o qué le falta, llamá a"
+    " ver_habitos de nuevo, aunque ya lo hayas consultado antes."
     " Si una herramienta falla, decilo en una frase simple, sin"
     " detalles técnicos."
     " Usalas solo cuando hagan falta."
@@ -477,6 +554,7 @@ if __name__ == "__main__":
         if not pregunta:
             continue
         historial.append({"role": "user", "content": pregunta})
+        nuevo_turno()   # mensaje nuevo tuyo (para confirmar el bloqueo)
         respuesta = pensar_con_herramientas(historial)
         historial.append({"role": "assistant", "content": respuesta})
         print("JARVIS:", respuesta, "\n")
