@@ -5,3 +5,5 @@ faster-whisper
 piper-tts
 sounddevice
 openwakeword
+google-genai
+python-dotenv

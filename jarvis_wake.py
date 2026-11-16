@@ -1,5 +1,5 @@
-# jarvis_wake.py - Mini-proyecto 3: JARVIS se activa con "Hey Jarvis"
-# Reusa el oido, el cerebro y la boca que ya escribimos en jarvis_voz.py
+# jarvis_wake.py - JARVIS manos libres: "Hey Jarvis" + acciones
+# Mini-proyecto 3 (wake word) + 4 (herramientas) + cerebro hibrido
 
 import sounddevice as sd
 import openwakeword.utils
@@ -7,10 +7,12 @@ from openwakeword.model import Model
 from faster_whisper import WhisperModel
 from piper import PiperVoice
 
+import cerebro
+import herramientas
+
 # Importamos lo que ya escribimos en jarvis_voz.py
 from jarvis_voz import (
     escuchar,
-    pensar,
     hablar,
     PERSONALIDAD,
     MODELO_WHISPER,
@@ -58,7 +60,11 @@ def main():
     oido = WhisperModel(MODELO_WHISPER, device="cpu", compute_type="int8")
     boca = PiperVoice.load(VOZ)
 
-    historial = [{"role": "system", "content": PERSONALIDAD}]
+    # Los recordatorios ahora se dicen en voz alta
+    herramientas.avisar = lambda texto: hablar(boca, texto)
+
+    personalidad = PERSONALIDAD + herramientas.INSTRUCCIONES
+    historial = [{"role": "system", "content": personalidad}]
     hablar(boca, "Listo. Decime Hey Jarvis cuando me necesites.")
 
     while True:
@@ -78,7 +84,8 @@ def main():
 
         historial.append({"role": "user", "content": texto})
         try:
-            respuesta = pensar(historial)  # 4) piensa
+            # 4) piensa (Gemini u Ollama) y usa herramientas
+            respuesta = cerebro.pensar(historial)
         except Exception as error:
             print("JARVIS: Tuve un problema:", error)
             historial.pop()
