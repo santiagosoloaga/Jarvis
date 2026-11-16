@@ -5,3 +5,9 @@ __pycache__/
 # Voces de Piper: pesan mucho y se vuelven a descargar
 *.onnx
 *.onnx.json
+
+# Notas personales de JARVIS
+notas.txt
+
+# Capturas de pantalla de JARVIS
+capturas/

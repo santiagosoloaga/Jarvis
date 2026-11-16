@@ -2,15 +2,21 @@
 # Cada funcion de aca es una herramienta que el LLM puede pedir usar.
 # El LLM NO ejecuta nada: solo pide. El que ejecuta es este codigo.
 
+import ast
 import json
+import math
+import operator
 import subprocess
 import threading
 import urllib.parse
 import urllib.request
 import webbrowser
 from datetime import datetime
+from pathlib import Path
 
 import ollama
+
+from control_pc import HERRAMIENTAS_PC
 
 MODELO = "llama3.2:3b"
 
@@ -40,9 +46,15 @@ ESTADOS = {
 }
 
 
+# Como se "presenta" JARVIS ante los sitios web. Algunos (como DolarApi)
+# rechazan con error 403 el nombre que usa Python por defecto.
+CABECERAS = {"User-Agent": "JARVIS/1.0 (asistente personal de Santiago)"}
+
+
 def leer_json(url):
     # Pide una pagina web y la convierte en un diccionario de Python
-    with urllib.request.urlopen(url, timeout=10) as respuesta:
+    pedido = urllib.request.Request(url, headers=CABECERAS)
+    with urllib.request.urlopen(pedido, timeout=10) as respuesta:
         return json.load(respuesta)
 
 
@@ -120,15 +132,191 @@ def poner_recordatorio(minutos: float, mensaje: str) -> str:
     return f"Listo, te aviso en {minutos:g} minutos."
 
 
+# ---------- HERRAMIENTA 5: calculadora exacta ----------
+# NUNCA uses eval() con texto que viene de afuera: ejecutaria cualquier
+# codigo. Aca leemos la cuenta como un arbol (ast) y solo permitimos
+# numeros, operaciones basicas y algunas funciones matematicas.
+OPERACIONES = {
+    ast.Add: operator.add, ast.Sub: operator.sub,
+    ast.Mult: operator.mul, ast.Div: operator.truediv,
+    ast.Pow: operator.pow, ast.Mod: operator.mod,
+    ast.USub: operator.neg, ast.UAdd: operator.pos,
+}
+FUNCIONES = {
+    "raiz": math.sqrt, "sqrt": math.sqrt, "abs": abs,
+    "sin": math.sin, "cos": math.cos, "tan": math.tan,
+    "log": math.log10, "ln": math.log,
+}
+CONSTANTES = {"pi": math.pi, "e": math.e}
+
+
+def _evaluar(nodo):
+    # Recorre el arbol de la cuenta, pieza por pieza
+    if isinstance(nodo, ast.Constant) and isinstance(nodo.value, (int, float)):
+        return nodo.value
+    if isinstance(nodo, ast.BinOp) and type(nodo.op) in OPERACIONES:
+        izquierda, derecha = _evaluar(nodo.left), _evaluar(nodo.right)
+        if isinstance(nodo.op, ast.Pow) and abs(derecha) > 1000:
+            raise ValueError("exponente demasiado grande")
+        return OPERACIONES[type(nodo.op)](izquierda, derecha)
+    if isinstance(nodo, ast.UnaryOp) and type(nodo.op) in OPERACIONES:
+        return OPERACIONES[type(nodo.op)](_evaluar(nodo.operand))
+    if isinstance(nodo, ast.Name) and nodo.id in CONSTANTES:
+        return CONSTANTES[nodo.id]
+    if (isinstance(nodo, ast.Call) and isinstance(nodo.func, ast.Name)
+            and nodo.func.id in FUNCIONES and len(nodo.args) == 1):
+        return FUNCIONES[nodo.func.id](_evaluar(nodo.args[0]))
+    raise ValueError("operación no permitida")
+
+
+def calcular(expresion: str) -> str:
+    """
+    Calcula una cuenta matemática de forma exacta. Usala siempre que haya que hacer una cuenta.
+
+    Args:
+        expresion: La cuenta escrita como en Python, por ejemplo "17.5 * 23", "2 ** 10", "raiz(144)" o "sin(pi / 6)"
+    """
+    texto = expresion.replace("×", "*").replace("^", "**").replace(",", ".")
+    try:
+        resultado = _evaluar(ast.parse(texto, mode="eval").body)
+    except ZeroDivisionError:
+        return "No se puede dividir por cero."
+    except Exception:
+        return f"No pude calcular '{expresion}'."
+    if isinstance(resultado, float):
+        resultado = round(resultado, 6)
+    return f"{expresion} = {resultado}"
+
+
+# ---------- HERRAMIENTA 6: pomodoro ----------
+def iniciar_pomodoro(minutos_estudio: float = 25, minutos_descanso: float = 5) -> str:
+    """
+    Inicia un pomodoro: un bloque de estudio y después un descanso. Avisa en voz alta cuando termina cada parte.
+
+    Args:
+        minutos_estudio: Minutos de estudio (normalmente 25)
+        minutos_descanso: Minutos de descanso (normalmente 5)
+    """
+    estudio, descanso = float(minutos_estudio), float(minutos_descanso)
+    fin_estudio = threading.Timer(
+        estudio * 60, avisar,
+        args=[f"Terminó el bloque de estudio. Descansá {descanso:g} minutos."],
+    )
+    fin_descanso = threading.Timer(
+        (estudio + descanso) * 60, avisar,
+        args=["Terminó el descanso. A estudiar de nuevo."],
+    )
+    for temporizador in (fin_estudio, fin_descanso):
+        temporizador.daemon = True
+        temporizador.start()
+    return (f"Pomodoro iniciado: {estudio:g} minutos de estudio "
+            f"y {descanso:g} de descanso.")
+
+
+# ---------- HERRAMIENTA 7 y 8: notas rapidas ----------
+# Se guardan en notas.txt, en la carpeta jarvis (Git lo ignora).
+ARCHIVO_NOTAS = Path(__file__).resolve().parent / "notas.txt"
+
+
+def anotar(texto: str) -> str:
+    """
+    Guarda una nota rápida para recordar más tarde.
+
+    Args:
+        texto: Lo que hay que anotar, por ejemplo "comprar resistencias"
+    """
+    fecha = datetime.now().strftime("%d/%m %H:%M")
+    with open(ARCHIVO_NOTAS, "a", encoding="utf-8") as archivo:
+        archivo.write(f"[{fecha}] {texto}\n")
+    return f"Anotado: {texto}."
+
+
+def leer_notas() -> str:
+    """Lee las últimas notas guardadas."""
+    if not ARCHIVO_NOTAS.exists():
+        return "No tenés notas guardadas."
+    lineas = ARCHIVO_NOTAS.read_text(encoding="utf-8").splitlines()
+    ultimas = [linea for linea in lineas if linea.strip()][-10:]
+    if not ultimas:
+        return "No tenés notas guardadas."
+    return "Tus últimas notas: " + "; ".join(ultimas)
+
+
+# ---------- HERRAMIENTA 9: abrir sitios web ----------
+# LISTA BLANCA de paginas. Si agregas una, sumala tambien al docstring.
+SITIOS = {
+    "youtube": "https://www.youtube.com",
+    "gmail": "https://mail.google.com",
+    "google drive": "https://drive.google.com",
+    "calendario": "https://calendar.google.com",
+    "github": "https://github.com",
+    "mercadolibre": "https://www.mercadolibre.com.ar",
+    "wikipedia": "https://es.wikipedia.org",
+}
+
+
+def abrir_sitio(nombre: str) -> str:
+    """
+    Abre una página web en el navegador.
+
+    Args:
+        nombre: Uno de: youtube, gmail, google drive, calendario, github, mercadolibre, wikipedia
+    """
+    nombre = nombre.lower().strip()
+    if nombre not in SITIOS:
+        return f"No tengo '{nombre}' en mi lista. Puedo abrir: {', '.join(SITIOS)}."
+    webbrowser.open(SITIOS[nombre])
+    return f"Abrí {nombre}."
+
+
+# ---------- HERRAMIENTA 10: dolar hoy ----------
+OTROS_NOMBRES_DOLAR = {"mep": "bolsa", "ccl": "contadoconliqui"}
+
+
+def formato_pesos(valor):
+    # 1515.5 -> "$1.516" (punto para los miles, como en Argentina)
+    return "$" + f"{valor:,.0f}".replace(",", ".")
+
+
+def obtener_dolar(tipo: str = "blue") -> str:
+    """
+    Devuelve la cotización del dólar en Argentina, compra y venta.
+
+    Args:
+        tipo: Uno de: oficial, blue, mep, ccl, mayorista, cripto, tarjeta
+    """
+    tipo = tipo.lower().strip()
+    tipo = OTROS_NOMBRES_DOLAR.get(tipo, tipo)
+    cotizaciones = leer_json("https://dolarapi.com/v1/dolares")
+    for dolar in cotizaciones:
+        if dolar.get("casa") == tipo:
+            texto = f"Dólar {dolar.get('nombre', tipo)}:"
+            if dolar.get("compra"):
+                texto += f" compra {formato_pesos(dolar['compra'])},"
+            texto += f" venta {formato_pesos(dolar['venta'])}."
+            return texto
+    disponibles = ", ".join(d.get("casa", "?") for d in cotizaciones)
+    return f"No encontré el dólar '{tipo}'. Hay: {disponibles}."
+
+
 # Diccionario nombre -> funcion: asi encontramos la que pidio el modelo
 HERRAMIENTAS = {
     f.__name__: f
-    for f in [obtener_hora, obtener_clima, abrir_programa, poner_recordatorio]
+    for f in [
+        obtener_hora, obtener_clima, abrir_programa, poner_recordatorio,
+        calcular, iniciar_pomodoro, anotar, leer_notas, abrir_sitio,
+        obtener_dolar,
+    ] + HERRAMIENTAS_PC   # las de control_pc.py
 }
 
 INSTRUCCIONES = (
-    " Tenés herramientas para saber la hora, el clima, abrir programas"
-    " y poner recordatorios. Usalas solo cuando hagan falta."
+    " Tenés herramientas para saber la hora, el clima y el dólar,"
+    " hacer cuentas exactas, abrir programas y páginas web, poner"
+    " recordatorios y pomodoros, anotar o leer notas, manejar el"
+    " volumen y la música, buscar en YouTube, sacar capturas de"
+    " pantalla y bloquear la compu (siempre pidiendo confirmación)."
+    " Usalas solo cuando hagan falta."
+    " Para cualquier cuenta usá la calculadora: nunca calcules de memoria."
     " Nunca inventes la hora ni el clima: pedíselos a tus herramientas."
     " Cuando una herramienta te devuelve un resultado, ese dato es real"
     " y actual: respondé usándolo y nunca digas que no tenés información."
@@ -207,8 +395,9 @@ if __name__ == "__main__":
         " rioplatense, en una o dos frases." + INSTRUCCIONES
     )
     historial = [{"role": "system", "content": personalidad}]
-    print("Probá: '¿qué hora es?', '¿cómo está el clima en Córdoba?',")
-    print("'abrí la calculadora', 'recordame en 1 minuto tomar agua'.")
+    print("Probá: '¿qué hora es?', '¿cuánto es 17,5 por 23?',")
+    print("'¿a cuánto está el blue?', 'anotá comprar resistencias',")
+    print("'¿qué tengo anotado?', 'abrí YouTube', 'empezá un pomodoro'.")
     print("Escribí 'salir' para terminar.\n")
     while True:
         pregunta = input("Vos: ").strip()

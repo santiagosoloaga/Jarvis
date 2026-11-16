@@ -10,6 +10,7 @@ Asistente personal por voz, 100% local. Proyecto de aprendizaje con Mentor.
 | `jarvis_voz.py` | JARVIS por voz: Whisper (oído) + Ollama (cerebro) + Piper (boca), con Enter |
 | `jarvis_wake.py` | JARVIS manos libres: "Hey Jarvis" + acciones (hora, clima, programas, recordatorios) |
 | `herramientas.py` | Las herramientas de JARVIS (tool calling). `python herramientas.py` las prueba por texto |
+| `control_pc.py` | Herramientas para la compu: volumen, música, YouTube, capturas y bloqueo (con confirmación) |
 | `cerebro.py` | Cerebro híbrido: Gemini (nube) con respaldo en Ollama (local). Necesita `GEMINI_API_KEY` en `.env` |
 | `lanzador.py` / `JARVIS.bat` | Panel de botones para abrir todo sin escribir comandos |
 | `pruebas/` | Scripts de prueba de cada parte por separado |

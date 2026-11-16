@@ -22,7 +22,7 @@ MODO = "auto"
 
 # Modelos de Gemini a probar, en orden. Google cambia los nombres
 # seguido: si fallan todos, fijate los disponibles en AI Studio.
-MODELOS_GEMINI = ["gemini-3.6-flash", "gemini-2.5-flash-lite"]
+MODELOS_GEMINI = ["gemini-3.6-flash", "gemini-3.5-flash-lite"]
 
 _cliente = None
 
@@ -85,11 +85,13 @@ def pensar_gemini(historial):
             )
         except Exception as error:
             ultimo_error = error
+            # Mostramos el motivo corto (ej: "429 RESOURCE_EXHAUSTED")
+            print(f"  [cerebro] {modelo} falló: {str(error)[:120]}")
             continue  # probamos con el siguiente modelo de la lista
         mostrar_herramientas_usadas(respuesta)
         if respuesta.text:
             return respuesta.text
-    raise RuntimeError(f"Gemini no respondió ({ultimo_error})")
+    raise RuntimeError("ningún modelo de Gemini respondió")
 
 
 def pensar(historial):
