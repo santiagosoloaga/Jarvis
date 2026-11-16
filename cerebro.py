@@ -3,6 +3,7 @@
 
 from google.genai import types
 
+import control_pc
 import gemini
 import herramientas
 
@@ -17,6 +18,11 @@ MODO = "auto"
 # Cuota gratis aprox.: Flash-Lite 500 pedidos/dia, Flash solo 20.
 # Por eso Flash-Lite va primero y Flash queda de respaldo.
 MODELOS_GEMINI = ["gemini-3.5-flash-lite", "gemini-3.6-flash"]
+
+# Cuantos mensajes de la charla le mandamos al cerebro (ademas de la
+# personalidad). Mandar TODO el historial lo hace cada vez mas lento
+# y gasta cuota; con los ultimos 20 (10 idas y vueltas) alcanza.
+MAX_MENSAJES = 20
 
 ultimo_cerebro = "ninguno todavía"   # la interfaz lo muestra
 cliente = gemini.cliente              # jarvis_wake lo usa al arrancar
@@ -72,20 +78,38 @@ def pensar_gemini(historial):
     return respuesta.text
 
 
+def recortar_historial(historial, maximo=MAX_MENSAJES):
+    # Devuelve una COPIA corta: personalidad + ultimos "maximo" mensajes.
+    # Es copia a proposito: lo que Ollama agregue al usar herramientas
+    # (mensajes "tool") queda ahi y no ensucia el historial original.
+    sistema = [m for m in historial[:1] if _rol(m) == "system"]
+    charla = historial[len(sistema):][-maximo:]
+    # La charla tiene que empezar con un mensaje tuyo (Gemini lo exige)
+    while charla and _rol(charla[0]) != "user":
+        charla.pop(0)
+    return sistema + charla
+
+
+def _rol(mensaje):
+    return mensaje["role"] if isinstance(mensaje, dict) else mensaje.role
+
+
 def pensar(historial):
-    # El ENRUTADOR de cerebros
+    # El ENRUTADOR de cerebros. Cada llamada = un mensaje nuevo tuyo.
     global ultimo_cerebro
+    control_pc.nuevo_turno()        # para la confirmacion de bloquear
+    corto = recortar_historial(historial)
     if MODO in ("auto", "gemini"):
         try:
             print("  [cerebro] Gemini (nube)")
-            return pensar_gemini(historial)
+            return pensar_gemini(corto)
         except Exception as error:
             if MODO == "gemini":
                 raise
             print(f"  [cerebro] Gemini falló: {error}")
     print("  [cerebro] Ollama (local)")
     ultimo_cerebro = "Ollama (local)"
-    return herramientas.pensar_con_herramientas(historial)
+    return herramientas.pensar_con_herramientas(corto)
 
 
 # ---------- PRUEBA POR TEXTO ----------

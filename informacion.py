@@ -10,9 +10,10 @@
 #
 # PRIVACIDAD: con Gemini gratis, lo que le mandas (incluido el PDF)
 # Google lo puede usar para mejorar sus productos. No le pases
-# documentos privados (sueldos, datos de clientes, contratos):
-# para esos poné USAR_GEMINI_EN_ARCHIVOS = False y se procesan
-# 100% en tu compu con Ollama.
+# documentos privados (sueldos, datos de clientes, contratos).
+# Por eso USAR_GEMINI_EN_ARCHIVOS viene en False: tus archivos se
+# procesan 100% en tu compu con Ollama. Ponelo en True solo si
+# aceptas mandarlos a Google (Gemini lee mejor tablas e imagenes).
 
 import csv
 import os
@@ -49,7 +50,7 @@ MAX_ARCHIVOS_REVISADOS = 5000   # para no recorrer el disco entero
 # con la cuota gratis (necesita cuenta paga en AI Studio).
 MODO_BUSQUEDA = "noticias"
 MAX_TITULARES = 6
-USAR_GEMINI_EN_ARCHIVOS = True  # False = PDFs y Excel solo en local
+USAR_GEMINI_EN_ARCHIVOS = False  # True = Gemini lee tus PDFs/Excel (Google puede usarlos)
 # Modelos para estas tareas, en orden (si uno falla, prueba el otro)
 MODELOS_GEMINI = ["gemini-3.5-flash-lite", "gemini-3.6-flash"]
 MODELO_LOCAL = "llama3.2:3b"
@@ -322,6 +323,9 @@ def consultar_planilla(nombre: str) -> str:
     Busca una planilla del usuario (Excel o CSV) por su nombre y
     devuelve su contenido con totales, promedios, mínimos y máximos
     ya calculados, para responder preguntas sobre esos datos.
+    Solo archivos Excel o CSV guardados en la compu. NO sirve para
+    Notion, ni para el tracker de hábitos (Habit Quest): para eso usá
+    ver_habitos o marcar_habitos.
 
     Args:
         nombre: Palabras del nombre del archivo, por ejemplo "gastos" o "ventas octubre"

@@ -14,3 +14,7 @@ capturas/
 
 # Tus PDFs y planillas para JARVIS (privados)
 documentos/
+
+# Llaves de Google Calendar: NUNCA se suben
+credentials.json
+token.json

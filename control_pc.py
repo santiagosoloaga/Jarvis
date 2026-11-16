@@ -113,7 +113,28 @@ def captura_de_pantalla() -> str:
 # pregunta primero, y solo bloquea si confirmas en menos de 1 minuto.
 # La confirmacion la controla ESTE codigo, no el modelo: aunque el
 # modelo se equivoque, nunca bloquea de una.
-_pedido_bloqueo = 0.0
+#
+# Ojo: no alcanza con mirar el reloj. En UN mismo turno el modelo
+# podria llamar bloquear_compu(false) y enseguida (true) sin que vos
+# digas nada. Por eso contamos TURNOS: el "si" tiene que llegar en el
+# turno siguiente al de la pregunta, o sea, en un mensaje nuevo tuyo.
+_turno_actual = 0
+_turno_pedido = None      # turno en que JARVIS pregunto "¿seguro?"
+_hora_pedido = 0.0
+
+
+def nuevo_turno():
+    # cerebro.py la llama cada vez que llega un mensaje TUYO
+    global _turno_actual
+    _turno_actual += 1
+
+
+def a_booleano(valor):
+    # Los modelos chicos a veces mandan "false" como TEXTO, y en Python
+    # bool("false") da True. Por eso lo convertimos a mano.
+    if isinstance(valor, str):
+        return valor.strip().lower() in ("true", "si", "sí", "1", "yes")
+    return bool(valor)
 
 
 def bloquear_compu(confirmado: bool = False) -> str:
@@ -123,13 +144,19 @@ def bloquear_compu(confirmado: bool = False) -> str:
     Args:
         confirmado: true solo si el usuario ya confirmó que quiere bloquear
     """
-    global _pedido_bloqueo
+    global _turno_pedido, _hora_pedido
     ahora = time.time()
-    if confirmado and ahora - _pedido_bloqueo < 60:
-        _pedido_bloqueo = 0.0
+    confirmo_a_tiempo = (
+        a_booleano(confirmado)
+        and _turno_pedido is not None
+        and _turno_actual == _turno_pedido + 1   # justo el turno siguiente
+        and ahora - _hora_pedido < 60
+    )
+    if confirmo_a_tiempo:
+        _turno_pedido = None
         USER32.LockWorkStation()
         return "Compu bloqueada."
-    _pedido_bloqueo = ahora
+    _turno_pedido, _hora_pedido = _turno_actual, ahora
     return ("Antes de bloquear, preguntale al usuario: "
             "'¿Seguro que querés bloquear la compu?'")
 

@@ -3,6 +3,8 @@
 # sumando ondas seno (como un sintetizador).
 # python efectos.py -> escuchas todos los sonidos.
 
+import threading
+
 import numpy as np
 import sounddevice as sd
 
@@ -13,6 +15,11 @@ VOLUMEN_SONIDOS = 0.2      # 0 a 1 (bajito para que no moleste)
 EFECTO_VOZ = True          # False = voz "limpia", sin efecto
 ECO_MS = 18                # retardo del eco en milisegundos
 ECO_FUERZA = 0.35          # 0 a 1: cuanto se nota el eco
+
+# Un solo "turno de parlante" a la vez: los recordatorios hablan desde
+# otro hilo y, sin esto, un sd.play cortaria al otro. Lo usan sonar()
+# y jarvis_voz.reproducir().
+CANDADO_AUDIO = threading.Lock()
 
 
 # ---------- SONIDOS ----------
@@ -51,9 +58,11 @@ SONIDOS = {
 
 
 def sonar(nombre, esperar=True):
-    sd.play(SONIDOS[nombre], samplerate=FS)
-    if esperar:
-        sd.wait()
+    with CANDADO_AUDIO:
+        sd.wait()                  # deja terminar lo que ya suena
+        sd.play(SONIDOS[nombre], samplerate=FS)
+        if esperar:
+            sd.wait()
 
 
 # ---------- EFECTO DE VOZ ----------

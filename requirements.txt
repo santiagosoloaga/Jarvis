@@ -1,5 +1,6 @@
 # Librerias de JARVIS (la "lista de compras")
 # Instalar todo con: pip install -r requirements.txt
+numpy
 ollama
 faster-whisper
 piper-tts
@@ -10,3 +11,6 @@ python-dotenv
 pillow
 pypdf
 openpyxl
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
