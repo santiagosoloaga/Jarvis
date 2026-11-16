@@ -1,3 +1,7 @@
 .venv/
 __pycache__/
 .env
+
+# Voces de Piper: pesan mucho y se vuelven a descargar
+*.onnx
+*.onnx.json

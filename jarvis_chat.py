@@ -1,40 +1,115 @@
-# jarvis_chat.py — Mini-proyecto 1: el chatbot de JARVIS en la terminal
-import ollama  # librería para hablarle al servidor de Ollama
+# jarvis_chat.py - Mini-proyecto 1: el chatbot de JARVIS
+# Personalidad, memoria, comandos y enrutador de modelos.
 
-MODELO = "llama3.2:3b"  # el "cerebro" que vamos a usar
+import ollama
+from datetime import datetime
 
-# El historial ES la memoria de JARVIS. Arranca con el mensaje de sistema (su personalidad).
-historial = [
-    {
-        "role": "system",
-        "content": (
-            "Sos JARVIS, el asistente personal de Santiago. "
-            "Respondés en español rioplatense, en pocas frases y con un toque de humor. "
-            "Si no sabés algo, lo decís."
-        ),
-    }
-]
+# ---------- CONFIGURACION ----------
+# Modelo rapido: charla y ordenes simples
+MODELO_RAPIDO = "llama3.2:3b"
+# Modelo que piensa: calculos (mas lento)
+MODELO_PENSADOR = "qwen3:4b"
+# Si la pregunta empieza con estas palabras, usa el pensador
+PALABRAS_PENSAR = ("calculá", "calcula", "resolvé", "resolve")
 
-print("JARVIS listo. Escribí 'salir' para terminar.\n")
+PERSONALIDAD = (
+    "Sos JARVIS, el asistente personal de Santiago. "
+    "Respondés en español rioplatense, en pocas frases "
+    "y con un toque de humor. "
+    "Si no sabés algo, lo decís."
+)
 
-while True:  # bucle: se repite hasta que lo cortemos con break
-    pregunta = input("Vos: ").strip()  # leemos lo que escribís y sacamos espacios de más
+AYUDA = (
+    "Comandos:\n"
+    "  /hora   -> te digo la hora\n"
+    "  /reset  -> borro la memoria de la charla\n"
+    "  /ayuda  -> muestro esta lista\n"
+    "  salir   -> cierro el programa\n"
+    "Si empezás con 'calculá' o 'resolvé', uso el pensador."
+)
 
-    if pregunta.lower() == "salir":  # condición de salida
+
+# ---------- FUNCIONES ----------
+def elegir_modelo(pregunta):
+    # El ENRUTADOR: decide que cerebro usar
+    if pregunta.lower().startswith(PALABRAS_PENSAR):
+        return MODELO_PENSADOR
+    return MODELO_RAPIDO
+
+
+def responder(historial, modelo):
+    # Manda el historial al modelo y muestra la respuesta
+    # a medida que llega (streaming)
+    pensar = modelo == MODELO_PENSADOR
+
+    print(f"JARVIS [{modelo}]: ", end="", flush=True)
+    respuesta_completa = ""
+    ya_avise = False
+
+    # think=None: no le pedimos pensar (llama no sabe)
+    for pedazo in ollama.chat(
+        model=modelo,
+        messages=historial,
+        stream=True,
+        think=True if pensar else None,
+    ):
+        # Pedazos de "pensamiento": avisamos una sola vez
+        if pedazo.message.thinking and not ya_avise:
+            print("(pensando...) ", end="", flush=True)
+            ya_avise = True
+
+        # Pedazos de la respuesta final: los mostramos
+        texto = pedazo.message.content or ""
+        print(texto, end="", flush=True)
+        respuesta_completa += texto
+
+    print("\n")
+    return respuesta_completa
+
+
+# ---------- PROGRAMA PRINCIPAL ----------
+# Caja 0 del historial: la personalidad
+historial = [{"role": "system", "content": PERSONALIDAD}]
+
+print("JARVIS listo. Escribí /ayuda para ver los comandos.\n")
+
+while True:
+    pregunta = input("Vos: ").strip()
+
+    # ----- COMANDOS (no llaman al modelo) -----
+    if pregunta.lower() == "salir":
         print("JARVIS: Nos vemos, Santiago.")
         break
-    if not pregunta:  # si apretaste Enter sin escribir nada, volvemos a preguntar
+
+    if not pregunta:
         continue
 
-    historial.append({"role": "user", "content": pregunta})  # 1) guardamos tu mensaje
+    if pregunta == "/ayuda":
+        print(AYUDA + "\n")
+        continue
 
-    print("JARVIS: ", end="", flush=True)
-    respuesta_completa = ""
-    # 2) le mandamos TODO el historial; con stream=True la respuesta llega de a pedacitos
-    for pedazo in ollama.chat(model=MODELO, messages=historial, stream=True):
-        texto = pedazo.message.content      # el pedacito de texto nuevo
-        print(texto, end="", flush=True)    # lo mostramos apenas llega
-        respuesta_completa += texto         # y lo vamos sumando
-    print("\n")
+    if pregunta == "/hora":
+        ahora = datetime.now().strftime("%H:%M")
+        print(f"JARVIS: Son las {ahora}, Santiago.\n")
+        continue
 
-    historial.append({"role": "assistant", "content": respuesta_completa})  # 3) guardamos la respuesta
+    if pregunta == "/reset":
+        # Nos quedamos solo con la personalidad
+        historial = [historial[0]]
+        print("JARVIS: Memoria borrada. ¿En qué te ayudo?\n")
+        continue
+
+    # ----- CHARLA NORMAL (va al modelo) -----
+    historial.append({"role": "user", "content": pregunta})
+    modelo = elegir_modelo(pregunta)
+
+    try:
+        respuesta = responder(historial, modelo)
+    except Exception as error:
+        # Si algo falla, avisamos sin cerrar el programa
+        print(f"\nJARVIS: Tuve un problema: {error}\n")
+        # Sacamos la pregunta que no se pudo responder
+        historial.pop()
+        continue
+
+    historial.append({"role": "assistant", "content": respuesta})

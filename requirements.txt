@@ -1,0 +1,6 @@
+# Librerias de JARVIS (la "lista de compras")
+# Instalar todo con: pip install -r requirements.txt
+ollama
+faster-whisper
+piper-tts
+sounddevice
