@@ -7,7 +7,8 @@ Asistente personal por voz, 100% local. Proyecto de aprendizaje con Mentor.
 | Archivo | Qué hace |
 | --- | --- |
 | `jarvis_chat.py` | Chat por texto: memoria, comandos (/hora, /reset, /ayuda) y enrutador de modelos |
-| `jarvis_voz.py` | JARVIS por voz: Whisper (oído) + Ollama (cerebro) + Piper (boca) |
+| `jarvis_voz.py` | JARVIS por voz: Whisper (oído) + Ollama (cerebro) + Piper (boca), con Enter |
+| `jarvis_wake.py` | JARVIS manos libres: se despierta cuando decís "Hey Jarvis" |
 | `pruebas/` | Scripts de prueba de cada parte por separado |
 
 ## Cómo armarlo en una compu nueva

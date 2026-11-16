@@ -4,3 +4,4 @@ ollama
 faster-whisper
 piper-tts
 sounddevice
+openwakeword

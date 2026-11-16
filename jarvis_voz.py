@@ -53,33 +53,40 @@ def hablar(boca, texto):
 
 
 # ---------- PROGRAMA PRINCIPAL ----------
-print("Cargando oído y boca (la primera vez tarda)...")
-oido = WhisperModel(MODELO_WHISPER, device="cpu", compute_type="int8")
-boca = PiperVoice.load(VOZ)
+def main():
+    print("Cargando oído y boca (la primera vez tarda)...")
+    oido = WhisperModel(MODELO_WHISPER, device="cpu", compute_type="int8")
+    boca = PiperVoice.load(VOZ)
 
-historial = [{"role": "system", "content": PERSONALIDAD}]
-hablar(boca, "Hola Santiago, te escucho.")
+    historial = [{"role": "system", "content": PERSONALIDAD}]
+    hablar(boca, "Hola Santiago, te escucho.")
 
-while True:
-    orden = input("\nEnter = hablar | 'salir' = terminar: ")
-    if orden.strip().lower() == "salir":
-        hablar(boca, "Nos vemos, Santiago.")
-        break
+    while True:
+        orden = input("\nEnter = hablar | 'salir' = terminar: ")
+        if orden.strip().lower() == "salir":
+            hablar(boca, "Nos vemos, Santiago.")
+            break
 
-    texto = escuchar(oido)
-    if not texto:
-        print("No escuché nada. Probá de nuevo.")
-        continue
-    print("Vos:", texto)
+        texto = escuchar(oido)
+        if not texto:
+            print("No escuché nada. Probá de nuevo.")
+            continue
+        print("Vos:", texto)
 
-    historial.append({"role": "user", "content": texto})
-    try:
-        respuesta = pensar(historial)
-    except Exception as error:
-        print("JARVIS: Tuve un problema:", error)
-        historial.pop()
-        continue
+        historial.append({"role": "user", "content": texto})
+        try:
+            respuesta = pensar(historial)
+        except Exception as error:
+            print("JARVIS: Tuve un problema:", error)
+            historial.pop()
+            continue
 
-    print("JARVIS:", respuesta)
-    historial.append({"role": "assistant", "content": respuesta})
-    hablar(boca, respuesta)
+        print("JARVIS:", respuesta)
+        historial.append({"role": "assistant", "content": respuesta})
+        hablar(boca, respuesta)
+
+
+# Solo arranca si corrés ESTE archivo.
+# Si otro archivo lo importa (como jarvis_wake.py), no arranca.
+if __name__ == "__main__":
+    main()
