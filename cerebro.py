@@ -25,6 +25,7 @@ MODO = "auto"
 MODELOS_GEMINI = ["gemini-3.6-flash", "gemini-3.5-flash-lite"]
 
 _cliente = None
+ultimo_cerebro = "ninguno todavía"   # la interfaz lo muestra
 
 
 def cliente():
@@ -64,12 +65,14 @@ def mostrar_herramientas_usadas(respuesta):
         for parte in turno.parts or []:
             if parte.function_call:
                 llamada = parte.function_call
+                herramientas.ultima_accion = llamada.name
                 print(f"  [herramienta] {llamada.name} {dict(llamada.args or {})}")
             if parte.function_response:
                 print(f"  [resultado] {parte.function_response.response}")
 
 
 def pensar_gemini(historial):
+    global ultimo_cerebro
     sistema, contenidos = a_formato_gemini(historial)
     config = types.GenerateContentConfig(
         system_instruction=sistema,
@@ -90,12 +93,14 @@ def pensar_gemini(historial):
             continue  # probamos con el siguiente modelo de la lista
         mostrar_herramientas_usadas(respuesta)
         if respuesta.text:
+            ultimo_cerebro = f"Gemini ({modelo})"
             return respuesta.text
     raise RuntimeError("ningún modelo de Gemini respondió")
 
 
 def pensar(historial):
     # El ENRUTADOR de cerebros
+    global ultimo_cerebro
     if MODO in ("auto", "gemini"):
         try:
             print("  [cerebro] Gemini (nube)")
@@ -105,17 +110,16 @@ def pensar(historial):
                 raise
             print(f"  [cerebro] Gemini falló: {error}")
     print("  [cerebro] Ollama (local)")
+    ultimo_cerebro = "Ollama (local)"
     return herramientas.pensar_con_herramientas(historial)
 
 
 # ---------- PRUEBA POR TEXTO ----------
 # python cerebro.py -> charlás por teclado para probar el cerebro
 if __name__ == "__main__":
-    personalidad = (
-        "Sos JARVIS, el asistente de Santiago. Respondés en español"
-        " rioplatense, en una o dos frases." + herramientas.INSTRUCCIONES
-    )
-    historial = [{"role": "system", "content": personalidad}]
+    from personalidad import PERSONALIDAD
+    instrucciones = PERSONALIDAD + herramientas.INSTRUCCIONES
+    historial = [{"role": "system", "content": instrucciones}]
     print(f"Modo: {MODO}. Escribí 'salir' para terminar.\n")
     while True:
         pregunta = input("Vos: ").strip()

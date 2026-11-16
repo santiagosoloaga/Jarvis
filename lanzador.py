@@ -15,6 +15,7 @@ NUEVA_CONSOLA = getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
 
 # (texto del boton, archivo que ejecuta)
 PROGRAMAS = [
+    ("JARVIS con interfaz (estilo Iron Man)", "interfaz.py"),
     ("JARVIS manos libres (Hey Jarvis)", "jarvis_wake.py"),
     ("JARVIS por voz (con Enter)", "jarvis_voz.py"),
     ("Chat por texto", "jarvis_chat.py"),

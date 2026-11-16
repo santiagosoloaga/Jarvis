@@ -332,9 +332,14 @@ RESULTADO_DIRECTO = False
 
 
 # ---------- EL IDA Y VUELTA ----------
+ultima_accion = "ninguna"   # la interfaz la muestra en pantalla
+
+
 def ejecutar(llamada):
     # Ejecuta UNA herramienta pedida por el modelo y devuelve el texto
+    global ultima_accion
     nombre = llamada.function.name
+    ultima_accion = nombre
     argumentos = llamada.function.arguments or {}
     print(f"  [herramienta] {nombre} {argumentos}")
     funcion = HERRAMIENTAS.get(nombre)

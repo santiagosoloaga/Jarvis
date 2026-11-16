@@ -5,21 +5,27 @@ import numpy as np
 import ollama
 import sounddevice as sd
 from faster_whisper import WhisperModel
-from piper import PiperVoice
+from piper import PiperVoice, SynthesisConfig
+
+import efectos
+from personalidad import PERSONALIDAD
 
 # ---------- CONFIGURACION ----------
 MODELO_LLM = "llama3.2:3b"
 MODELO_WHISPER = "small"       # si va lento, proba "base"
 VOZ = "es_AR-daniela-high.onnx"
+# Voces masculinas para probar (bajalas antes con piper.download_voices):
+#   "es_ES-davefx-medium.onnx"  (España)
+#   "es_MX-ald-medium.onnx"     (México)
+VELOCIDAD = 1.05               # >1 = mas pausado y "elegante"; <1 = rapido
 FRECUENCIA = 16000             # muestras por segundo del microfono
 SEGUNDOS = 5                   # cuanto tiempo graba cada vez
 
-PERSONALIDAD = (
-    "Sos JARVIS, el asistente personal de Santiago. "
-    "Respondés en español rioplatense, en una o dos frases. "
-    "Tu respuesta se va a leer en voz alta: "
-    "no uses emojis, asteriscos, listas ni símbolos."
-)
+AJUSTES_VOZ = SynthesisConfig(length_scale=VELOCIDAD)
+
+# "Gancho": si alguien (la interfaz) pone aca una funcion, se la
+# llama con cada audio que JARVIS dice, para dibujar su voz.
+al_reproducir = None
 
 
 # ---------- OIDO: microfono -> texto ----------
@@ -43,13 +49,31 @@ def pensar(historial):
 
 
 # ---------- BOCA: texto -> parlante ----------
-def hablar(boca, texto):
-    pedazos = list(boca.synthesize(texto))
+def sintetizar(boca, texto):
+    # Fabrica el audio SIN reproducirlo. Devuelve (audio, frecuencia).
+    # Separarlo sirve para preparar frases antes y tenerlas listas.
+    pedazos = list(boca.synthesize(texto, syn_config=AJUSTES_VOZ))
     if not pedazos:
-        return
+        return None
+    fs = pedazos[0].sample_rate
     audio = np.concatenate([p.audio_int16_array for p in pedazos])
-    sd.play(audio, samplerate=pedazos[0].sample_rate)
-    sd.wait()
+    return efectos.efecto_voz(audio, fs), fs
+
+
+def reproducir(sonido, esperar=True):
+    # esperar=False: suena "de fondo" mientras el programa sigue
+    if sonido is None:
+        return
+    audio, fs = sonido
+    if al_reproducir:
+        al_reproducir(audio, fs)
+    sd.play(audio, samplerate=fs)
+    if esperar:
+        sd.wait()
+
+
+def hablar(boca, texto):
+    reproducir(sintetizar(boca, texto))
 
 
 # ---------- PROGRAMA PRINCIPAL ----------
