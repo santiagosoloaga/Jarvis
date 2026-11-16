@@ -13,6 +13,8 @@ Asistente personal por voz, 100% local. Proyecto de aprendizaje con Mentor.
 | `control_pc.py` | Herramientas para la compu: volumen, música, YouTube, capturas y bloqueo (con confirmación) |
 | `cerebro.py` | Cerebro híbrido: Gemini (nube) con respaldo en Ollama (local). Necesita `GEMINI_API_KEY` en `.env` |
 | `interfaz.py` | JARVIS con interfaz visual estilo Iron Man (reactor animado, registro, hora, clima, charla). F11 = pantalla completa |
+| `informacion.py` | Buscar noticias en Google Noticias, resumir PDFs y consultar planillas Excel/CSV de tus carpetas |
+| `gemini.py` | Conexión con Gemini compartida: prueba modelos en orden y deja descansar los que agotaron la cuota |
 | `personalidad.py` | Cómo habla JARVIS: personalidad, frases, saludo de arranque (hora, fecha, clima) |
 | `efectos.py` | Sonidos de JARVIS (arranque, despertar, dormir) y efecto "metálico" de la voz |
 | `lanzador.py` / `JARVIS.bat` | Panel de botones para abrir todo sin escribir comandos |

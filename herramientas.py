@@ -6,6 +6,7 @@ import ast
 import json
 import math
 import operator
+import re
 import subprocess
 import threading
 import urllib.parse
@@ -17,6 +18,7 @@ from pathlib import Path
 import ollama
 
 from control_pc import HERRAMIENTAS_PC
+from informacion import HERRAMIENTAS_INFO
 
 MODELO = "llama3.2:3b"
 
@@ -299,14 +301,66 @@ def obtener_dolar(tipo: str = "blue") -> str:
     return f"No encontré el dólar '{tipo}'. Hay: {disponibles}."
 
 
+# ---------- HERRAMIENTA: buscar informacion (Wikipedia) ----------
+WIKIPEDIA = "https://es.wikipedia.org/w/api.php"
+MAX_CARACTERES_INFO = 700   # resumen corto: se lee en voz alta
+
+
+def recortar(texto, maximo):
+    # Corta en el ultimo punto antes del maximo (no a mitad de frase)
+    if len(texto) <= maximo:
+        return texto
+    corte = texto.rfind(". ", 0, maximo)
+    return texto[:corte + 1] if corte > 0 else texto[:maximo] + "..."
+
+
+def buscar_informacion(tema: str) -> str:
+    """
+    Busca información sobre un tema en Wikipedia en español y
+    devuelve un resumen. Usala para preguntas de cultura general,
+    ciencia, tecnología, historia, personas, lugares o conceptos
+    ("¿qué es...?", "¿quién fue...?", "contame sobre...").
+
+    Args:
+        tema: Lo que hay que buscar, por ejemplo "servomotor" o "Alan Turing"
+    """
+    # Un solo pedido hace dos cosas:
+    #   generator=search -> busca el articulo que mejor coincide
+    #   prop=extracts    -> trae su introduccion en texto plano
+    parametros = urllib.parse.urlencode({
+        "action": "query", "format": "json", "formatversion": 2,
+        "generator": "search", "gsrsearch": tema, "gsrlimit": 1,
+        "prop": "extracts", "exintro": 1, "explaintext": 1,
+        "redirects": 1,
+    })
+    datos = leer_json(f"{WIKIPEDIA}?{parametros}")
+    paginas = datos.get("query", {}).get("pages", [])
+    if isinstance(paginas, dict):        # formato viejo de la API
+        paginas = list(paginas.values())
+    if not paginas:
+        return f"No encontré información sobre {tema} en Wikipedia."
+
+    pagina = paginas[0]
+    texto = pagina.get("extract", "")
+    # Sacamos lo que esta entre parentesis (pronunciacion, fechas
+    # en otros idiomas...): en voz alta suena horrible
+    texto = re.sub(r"\s*\([^()]*\)", "", texto)
+    texto = " ".join(texto.split())      # espacios y saltos de linea
+    if not texto:
+        return f"Encontré el artículo {pagina['title']}, pero está vacío."
+    texto = recortar(texto, MAX_CARACTERES_INFO)
+    return f"Según Wikipedia ({pagina['title']}): {texto}"
+
+
 # Diccionario nombre -> funcion: asi encontramos la que pidio el modelo
 HERRAMIENTAS = {
     f.__name__: f
     for f in [
         obtener_hora, obtener_clima, abrir_programa, poner_recordatorio,
         calcular, iniciar_pomodoro, anotar, leer_notas, abrir_sitio,
-        obtener_dolar,
-    ] + HERRAMIENTAS_PC   # las de control_pc.py
+        obtener_dolar, buscar_informacion,
+    ] + HERRAMIENTAS_PC     # las de control_pc.py
+    + HERRAMIENTAS_INFO   # las de informacion.py
 }
 
 INSTRUCCIONES = (
@@ -315,6 +369,18 @@ INSTRUCCIONES = (
     " recordatorios y pomodoros, anotar o leer notas, manejar el"
     " volumen y la música, buscar en YouTube, sacar capturas de"
     " pantalla y bloquear la compu (siempre pidiendo confirmación)."
+    " Para preguntas de información general (qué es algo, quién fue"
+    " alguien, historia, ciencia) usá buscar_informacion y resumí"
+    " el resultado en una o dos frases, con tus palabras."
+    " Para noticias, resultados deportivos o cualquier dato actual"
+    " usá buscar_en_google con palabras clave cortas; te devuelve"
+    " titulares con su fecha: contestá con el más reciente que"
+    " responda la pregunta. Para resumir un PDF del usuario usá"
+    " resumir_pdf, y para preguntas sobre sus planillas de Excel o CSV"
+    " usá consultar_planilla (los totales y promedios ya vienen"
+    " calculados: usalos tal cual)."
+    " Si una herramienta falla, decilo en una frase simple, sin"
+    " detalles técnicos."
     " Usalas solo cuando hagan falta."
     " Para cualquier cuenta usá la calculadora: nunca calcules de memoria."
     " Nunca inventes la hora ni el clima: pedíselos a tus herramientas."

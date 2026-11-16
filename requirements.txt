@@ -8,3 +8,5 @@ openwakeword
 google-genai
 python-dotenv
 pillow
+pypdf
+openpyxl

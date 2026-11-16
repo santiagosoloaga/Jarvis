@@ -1,18 +1,10 @@
 # cerebro.py - El cerebro de JARVIS: Gemini (nube) + Ollama (local)
 # Usa Gemini cuando hay internet y cupo gratis; si falla, usa Ollama.
 
-import logging
-import os
-
-from dotenv import load_dotenv
-from google import genai
 from google.genai import types
 
+import gemini
 import herramientas
-
-load_dotenv()  # lee el archivo .env y carga GEMINI_API_KEY
-# Oculta avisos tecnicos de la libreria de Google
-logging.getLogger("google_genai").setLevel(logging.ERROR)
 
 # ---------- CONFIGURACION ----------
 # "auto"   = Gemini; si falla (sin internet o sin cupo), Ollama
@@ -22,21 +14,12 @@ MODO = "auto"
 
 # Modelos de Gemini a probar, en orden. Google cambia los nombres
 # seguido: si fallan todos, fijate los disponibles en AI Studio.
-MODELOS_GEMINI = ["gemini-3.6-flash", "gemini-3.5-flash-lite"]
+# Cuota gratis aprox.: Flash-Lite 500 pedidos/dia, Flash solo 20.
+# Por eso Flash-Lite va primero y Flash queda de respaldo.
+MODELOS_GEMINI = ["gemini-3.5-flash-lite", "gemini-3.6-flash"]
 
-_cliente = None
 ultimo_cerebro = "ninguno todavía"   # la interfaz lo muestra
-
-
-def cliente():
-    # Crea la conexion con Gemini una sola vez y la reutiliza
-    global _cliente
-    if _cliente is None:
-        clave = os.environ.get("GEMINI_API_KEY")
-        if not clave:
-            raise RuntimeError("falta GEMINI_API_KEY en el archivo .env")
-        _cliente = genai.Client(api_key=clave)
-    return _cliente
+cliente = gemini.cliente              # jarvis_wake lo usa al arrancar
 
 
 def a_formato_gemini(historial):
@@ -80,22 +63,13 @@ def pensar_gemini(historial):
         # La libreria las ejecuta sola cuando Gemini las pide.
         tools=list(herramientas.HERRAMIENTAS.values()),
     )
-    ultimo_error = None
-    for modelo in MODELOS_GEMINI:
-        try:
-            respuesta = cliente().models.generate_content(
-                model=modelo, contents=contenidos, config=config
-            )
-        except Exception as error:
-            ultimo_error = error
-            # Mostramos el motivo corto (ej: "429 RESOURCE_EXHAUSTED")
-            print(f"  [cerebro] {modelo} falló: {str(error)[:120]}")
-            continue  # probamos con el siguiente modelo de la lista
-        mostrar_herramientas_usadas(respuesta)
-        if respuesta.text:
-            ultimo_cerebro = f"Gemini ({modelo})"
-            return respuesta.text
-    raise RuntimeError("ningún modelo de Gemini respondió")
+    # gemini.pedir prueba los modelos en orden y saltea los agotados
+    respuesta, modelo = gemini.pedir(MODELOS_GEMINI, contenidos, config)
+    mostrar_herramientas_usadas(respuesta)
+    if not respuesta.text:
+        raise RuntimeError(f"{modelo} respondió vacío")
+    ultimo_cerebro = f"Gemini ({modelo})"
+    return respuesta.text
 
 
 def pensar(historial):
