@@ -4,8 +4,8 @@
 
 import os
 import random
-import time
 import string
+import time
 import unicodedata
 from collections import deque
 
@@ -21,8 +21,7 @@ import control_pc
 import efectos
 import herramientas
 import personalidad
-from jarvis_voz import (hablar, sintetizar, reproducir, transcribir,
-                        MODELO_WHISPER, VOZ, FRECUENCIA)
+from jarvis_voz import FRECUENCIA, MODELO_WHISPER, VOZ, hablar, reproducir, sintetizar, transcribir
 
 # ---------- CONFIGURACION ----------
 # Como detecta su nombre:

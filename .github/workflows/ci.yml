@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      # Solo lo liviano que las pruebas necesitan (sin Whisper, Piper ni audio)
+      - name: Instalar dependencias de prueba
+        run: pip install pytest ruff ollama google-genai openpyxl pypdf python-dotenv
+      - name: Linter (ruff)
+        run: ruff check .
+      - name: Pruebas (pytest)
+        run: pytest

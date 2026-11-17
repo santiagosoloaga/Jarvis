@@ -1,8 +1,9 @@
 # jarvis_chat.py - Mini-proyecto 1: el chatbot de JARVIS
 # Personalidad, memoria, comandos y enrutador de modelos.
 
-import ollama
 from datetime import datetime
+
+import ollama
 
 # ---------- CONFIGURACION ----------
 # Modelo rapido: charla y ordenes simples

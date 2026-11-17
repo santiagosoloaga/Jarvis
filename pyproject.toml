@@ -1,0 +1,25 @@
+[project]
+name = "jarvis"
+version = "0.3.0"
+description = "Asistente personal por voz en español rioplatense: cerebro híbrido Gemini + Ollama, tool calling, interfaz visual y acceso desde el celular."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.13"
+authors = [{ name = "Santiago Soloaga" }]
+keywords = ["asistente", "voz", "whisper", "gemini", "ollama", "tool-calling", "python"]
+# Las dependencias de ejecución viven en requirements.txt (instalación simple en Windows).
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+extend-exclude = ["pruebas"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]   # los comentarios en español pueden ser largos
