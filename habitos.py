@@ -20,9 +20,10 @@ import urllib.request
 from datetime import date, timedelta
 
 # --- Configuración ---
-# IDs de tu workspace (salen de las URLs de las páginas).
-BASE_REGISTRO = "41a1cf97-26a3-812e-a559-d76c27f59922"   # 📅 Registro diario
-PAGINA_JUGADOR = "41a1cf97-26a3-81fb-aac6-dc3a75f0a8a1"  # 👤 Jugador: Santiago
+# Las claves y los IDs de tu workspace viven en .env (salen de las URLs de las páginas):
+#   NOTION_TOKEN=...            secreto de la integración
+#   NOTION_BASE_REGISTRO=...    ID de la base "Registro diario"
+#   NOTION_PAGINA_JUGADOR=...   ID de la página del jugador (relación "Jugador")
 VERSION_API = "2022-06-28"
 URL_API = "https://api.notion.com/v1"
 
@@ -117,14 +118,20 @@ def nombre_hablado(casilla: str) -> str:
 
 
 # ---------- Comunicación con Notion ----------
-def _pedir(metodo: str, ruta: str, cuerpo: dict | None = None) -> dict:
-    token = os.environ.get("NOTION_TOKEN")
-    if not token:
+def _config(nombre: str) -> str:
+    """Lee un valor de configuración del entorno (o del .env); avisa claro si falta."""
+    valor = os.environ.get(nombre)
+    if not valor:
         from dotenv import load_dotenv
         load_dotenv()
-        token = os.environ.get("NOTION_TOKEN")
-    if not token:
-        raise RuntimeError("Falta NOTION_TOKEN en el archivo .env")
+        valor = os.environ.get(nombre)
+    if not valor:
+        raise RuntimeError(f"Falta {nombre} en el archivo .env")
+    return valor
+
+
+def _pedir(metodo: str, ruta: str, cuerpo: dict | None = None) -> dict:
+    token = _config("NOTION_TOKEN")
     datos = json.dumps(cuerpo).encode("utf-8") if cuerpo is not None else None
     pedido = urllib.request.Request(
         f"{URL_API}{ruta}", data=datos, method=metodo,
@@ -145,17 +152,17 @@ def _pedir(metodo: str, ruta: str, cuerpo: dict | None = None) -> dict:
 
 def _fila_del_dia(fecha: date) -> dict:
     """Busca la fila de esa fecha; si no existe la crea."""
-    resultado = _pedir("POST", f"/databases/{BASE_REGISTRO}/query", {
+    resultado = _pedir("POST", f"/databases/{_config('NOTION_BASE_REGISTRO')}/query", {
         "filter": {"property": "Fecha", "date": {"equals": fecha.isoformat()}},
         "page_size": 1})
     if resultado.get("results"):
         return resultado["results"][0]
     return _pedir("POST", "/pages", {
-        "parent": {"database_id": BASE_REGISTRO},
+        "parent": {"database_id": _config("NOTION_BASE_REGISTRO")},
         "properties": {
             "Día": {"title": [{"text": {"content": titulo_dia(fecha)}}]},
             "Fecha": {"date": {"start": fecha.isoformat()}},
-            "Jugador": {"relation": [{"id": PAGINA_JUGADOR}]},
+            "Jugador": {"relation": [{"id": _config("NOTION_PAGINA_JUGADOR")}]},
         }})
 
 
@@ -241,7 +248,7 @@ def ver_habitos(dia: str = "hoy", que: str = "ambos") -> str:
     if fecha is None:
         return f"No entendí el día '{dia}'. Decime hoy, ayer o una fecha pasada."
     try:
-        resultado = _pedir("POST", f"/databases/{BASE_REGISTRO}/query", {
+        resultado = _pedir("POST", f"/databases/{_config('NOTION_BASE_REGISTRO')}/query", {
             "filter": {"property": "Fecha", "date": {"equals": fecha.isoformat()}},
             "page_size": 1})
     except RuntimeError as error:

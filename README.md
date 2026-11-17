@@ -119,7 +119,7 @@ copy .env.example .env   # y poné tu clave de Gemini (gratis)
 3. En Notion, abrí la página del tracker → **···** → **Conexiones** → agregá tu integración.
 4. Probá con `python habitos.py`. Por voz: *"marcá que fui al gimnasio"*, *"¿qué me falta hoy?"*.
 
-Los IDs de tus bases están al comienzo de `habitos.py`.
+5. Poné también en `.env` los IDs de tu base *Registro diario* (`NOTION_BASE_REGISTRO`) y de tu página de jugador (`NOTION_PAGINA_JUGADOR`): son el código largo al final de la URL de cada página en Notion.
 
 ### 🗣️ Voz y velocidad
 
