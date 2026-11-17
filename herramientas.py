@@ -18,8 +18,8 @@ from pathlib import Path
 import ollama
 
 from calendario import HERRAMIENTAS_CALENDARIO
-from habitos import HERRAMIENTAS_HABITOS
 from control_pc import HERRAMIENTAS_PC, nuevo_turno
+from habitos import HERRAMIENTAS_HABITOS
 from informacion import HERRAMIENTAS_INFO
 
 MODELO = "llama3.2:3b"
@@ -77,7 +77,7 @@ def obtener_clima(ciudad: str) -> str:
     if not lugares:
         return f"No encontré la ciudad {ciudad}."
     # Preferimos ciudades de Argentina (hay otra Córdoba en España)
-    argentinas = [l for l in lugares if l.get("country_code") == "AR"]
+    argentinas = [lugar for lugar in lugares if lugar.get("country_code") == "AR"]
     lugar = (argentinas or lugares)[0]
 
     # 2) Pedimos el clima actual en esas coordenadas

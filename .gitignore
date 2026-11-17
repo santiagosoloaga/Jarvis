@@ -18,3 +18,10 @@ documentos/
 # Llaves de Google Calendar: NUNCA se suben
 credentials.json
 token.json
+web_jarvis.log
+
+# Instaladores, logs y cachés
+*.exe
+*.log
+.pytest_cache/
+.ruff_cache/

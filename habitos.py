@@ -251,7 +251,9 @@ def ver_habitos(dia: str = "hoy", que: str = "ambos") -> str:
         return f"No hay registro para {_fecha_hablada(fecha)} todavía."
     hechos = _casillas_tildadas(resultado["results"][0])
     faltan = [c for c in HABITOS if c not in hechos]
-    lista = lambda casillas: ", ".join(nombre_hablado(c) for c in casillas)
+    def lista(casillas):
+        return ", ".join(nombre_hablado(c) for c in casillas)
+
     que = _limpiar(que)
     if que.startswith("cumpl") or que.startswith("hech"):
         if not hechos:
