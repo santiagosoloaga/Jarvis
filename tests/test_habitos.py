@@ -35,3 +35,15 @@ def test_detecta_habitos_y_ignora_negaciones():
 
 def test_texto_sin_habitos():
     assert habitos.detectar_habitos("hoy llovió mucho") == ([], [])
+
+
+def test_falta_configuracion_avisa_claro(monkeypatch):
+    monkeypatch.delenv("NOTION_BASE_REGISTRO", raising=False)
+    monkeypatch.setattr("dotenv.load_dotenv", lambda *a, **k: False)   # ignora un .env local
+    with pytest.raises(RuntimeError, match="NOTION_BASE_REGISTRO"):
+        habitos._config("NOTION_BASE_REGISTRO")
+
+
+def test_config_lee_del_entorno(monkeypatch):
+    monkeypatch.setenv("NOTION_BASE_REGISTRO", "abc123")
+    assert habitos._config("NOTION_BASE_REGISTRO") == "abc123"
